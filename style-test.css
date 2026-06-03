@@ -61,6 +61,11 @@ body {
 .sidebar-logo {
   padding: 28px 24px 20px;
   border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.sidebar-logo:hover {
+  background: var(--bg);
 }
 .sidebar-logo h1 {
   font-size: 20px;
@@ -227,6 +232,14 @@ body {
 .topbar-title {
   font-size: 16px;
   font-weight: 600;
+  cursor: pointer;
+  border-radius: var(--radius-xs);
+  padding: 4px 6px;
+  margin: -4px -6px;
+  transition: background 0.15s;
+}
+.topbar-title:hover {
+  background: var(--bg);
 }
 .topbar-sub {
   font-size: 13px;
@@ -246,6 +259,23 @@ body {
   border-radius: var(--radius-xs);
 }
 .hamburger:hover {
+  background: var(--bg);
+}
+.btn-back {
+  display: none;
+  width: 36px;
+  height: 36px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  color: var(--text);
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-xs);
+  flex-shrink: 0;
+}
+.btn-back:hover {
   background: var(--bg);
 }
 
@@ -383,6 +413,11 @@ body {
   color: var(--text-2);
   font-size: 13px;
 }
+.td-korean {
+  font-size: 13px;
+  color: #7d3c98;
+  font-weight: 500;
+}
 .level-badge {
   display: inline-block;
   padding: 3px 9px;
@@ -479,6 +514,11 @@ body {
   font-size: 12px;
   font-weight: 600;
   color: var(--text-2);
+}
+.form-label.required::after {
+  content: " *";
+  color: #e74c3c;
+  font-weight: 700;
 }
 .form-input {
   background: var(--bg);
@@ -1052,6 +1092,129 @@ textarea.form-input {
   opacity: 1;
 }
 
+/* ===== WORD LIST FILTER BAR ===== */
+.word-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+  align-items: center;
+}
+.filter-pill {
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.filter-pill:hover {
+  border-color: var(--green-mid);
+  color: var(--green-dark);
+}
+.filter-pill.sel {
+  background: var(--green);
+  border-color: var(--green);
+  color: white;
+}
+.filter-pill.joyo {
+  border-style: dashed;
+  border-color: #9b59b6;
+  color: #7d3c98;
+}
+.filter-pill.joyo:hover {
+  background: #f5eef8;
+}
+.filter-pill.joyo.sel {
+  background: #9b59b6;
+  border-color: #9b59b6;
+  color: white;
+  border-style: solid;
+}
+.filter-pill.sub {
+  font-size: 12px;
+  padding: 5px 11px;
+  border-color: #c39bd3;
+  color: #7d3c98;
+}
+.filter-pill.sub.sel {
+  background: #9b59b6;
+  border-color: #9b59b6;
+  color: white;
+}
+.filter-sep {
+  color: var(--border-strong);
+  font-size: 18px;
+  padding: 0 2px;
+  user-select: none;
+}
+.td-example {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+/* ===== EDIT MODAL ===== */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.modal-overlay.show {
+  display: flex;
+}
+.modal-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  padding: 28px;
+  width: 100%;
+  max-width: 560px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+.modal-close {
+  width: 32px;
+  height: 32px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  color: var(--text-3);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal-close:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+
 /* ===== MOBILE OVERLAY ===== */
 .sidebar-overlay {
   display: none;
@@ -1156,10 +1319,11 @@ textarea.form-input {
     font-size: 52px;
   }
 
-  .word-table th:nth-child(3),
-  .word-table td:nth-child(3),
-  .word-table th:nth-child(4),
-  .word-table td:nth-child(4) {
+  .word-table .col-reading,
+  .word-table .col-example,
+  .word-table .col-onyomi,
+  .word-table .col-kunyomi,
+  .word-table .col-korean {
     display: none;
   }
 
