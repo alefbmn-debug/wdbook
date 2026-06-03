@@ -5,6 +5,7 @@ import {
   getDocs,
   addDoc,
   deleteDoc,
+  updateDoc,
   doc,
   orderBy,
   query,
@@ -178,6 +179,9 @@ const SAMPLE_WORDS = [
 /* ===== STATE ===== */
 let words = [];
 let selLevel = "all";
+let wordJoyoFilter = "all";
+let editingId = null;
+let navHistory = [];
 /* ===== FORM TOGGLE ===== */
 function toggleAddForm(type) {
   const normalEl = document.getElementById("normal-fields");
@@ -290,7 +294,13 @@ function closeSidebar() {
 }
 
 /* ===== SCREENS ===== */
-function showScreen(name) {
+function showScreen(name, addToHistory = true) {
+  if (name === "home") {
+    navHistory = [];
+  } else if (addToHistory && currentScreen !== name) {
+    navHistory.push(currentScreen);
+  }
+
   document
     .querySelectorAll(".screen")
     .forEach((s) => s.classList.remove("active"));
@@ -307,6 +317,19 @@ function showScreen(name) {
     review: "복습하기",
   };
   document.getElementById("topbar-title").textContent = titles[name] || "";
+
+  const backBtn = document.getElementById("btn-back");
+  backBtn.style.display = navHistory.length > 0 ? "flex" : "none";
+}
+
+function goBack() {
+  if (!navHistory.length) return;
+  const prev = navHistory.pop();
+  showScreen(prev, false);
+  if (prev === "add") {
+    renderAddLevel();
+    toggleAddForm(addLv === JOYO_LEVEL ? "joyo" : "normal");
+  }
 }
 
 /* ===== HOME SCREEN ===== */
@@ -331,6 +354,7 @@ function renderHome() {
   allPill.textContent = "전체";
   allPill.onclick = () => {
     selLevel = "all";
+    wordJoyoFilter = "all";
     renderAll();
   };
   pillWrap.appendChild(allPill);
@@ -341,6 +365,7 @@ function renderHome() {
     pill.textContent = `${lv} (${cnt})`;
     pill.onclick = () => {
       selLevel = lv;
+      wordJoyoFilter = "all";
       renderAll();
     };
     pillWrap.appendChild(pill);
@@ -355,14 +380,75 @@ function renderHome() {
   joyoPill.textContent = `상용한자 (${joyoCnt})`;
   joyoPill.onclick = () => {
     selLevel = JOYO_LEVEL;
+    wordJoyoFilter = "all";
     renderAll();
   };
   pillWrap.appendChild(joyoPill);
 }
 
 /* ===== WORD LIST ===== */
+function renderWordFilterBar() {
+  const bar = document.getElementById("word-filter-bar");
+  bar.innerHTML = "";
+
+  const mainLevels = [
+    { v: "all", label: "전체", cls: "" },
+    ...LEVELS.map((l) => ({ v: l, label: l, cls: "" })),
+    { v: JOYO_LEVEL, label: "상용한자", cls: "joyo" },
+  ];
+
+  mainLevels.forEach(({ v, label, cls }) => {
+    const pill = mkEl(
+      "button",
+      `filter-pill${cls ? " " + cls : ""}${selLevel === v ? " sel" : ""}`,
+    );
+    pill.textContent = label;
+    pill.onclick = () => {
+      selLevel = v;
+      wordJoyoFilter = "all";
+      renderAll();
+    };
+    bar.appendChild(pill);
+  });
+
+  if (selLevel === JOYO_LEVEL) {
+    const sep = mkEl("span", "filter-sep");
+    sep.textContent = "|";
+    bar.appendChild(sep);
+
+    const subLevels = [
+      { v: "all", label: "전체" },
+      ...LEVELS.map((l) => ({ v: l, label: l })),
+      { v: "unset", label: "미지정" },
+    ];
+
+    subLevels.forEach(({ v, label }) => {
+      const pill = mkEl(
+        "button",
+        `filter-pill sub${wordJoyoFilter === v ? " sel" : ""}`,
+      );
+      pill.textContent = label;
+      pill.onclick = (e) => {
+        e.stopPropagation();
+        wordJoyoFilter = v;
+        renderWordList();
+      };
+      bar.appendChild(pill);
+    });
+  }
+}
+
 function renderWordList() {
-  const list = filtered();
+  const isJoyo = selLevel === JOYO_LEVEL;
+  let list = filtered();
+
+  if (isJoyo && wordJoyoFilter !== "all") {
+    list =
+      wordJoyoFilter === "unset"
+        ? list.filter((w) => !w.jlpt)
+        : list.filter((w) => w.jlpt === wordJoyoFilter);
+  }
+
   const body = document.getElementById("word-tbody");
   const notice = document.getElementById("sample-notice");
   const countEl = document.getElementById("word-count");
@@ -370,10 +456,34 @@ function renderWordList() {
   countEl.textContent = `${list.length}개`;
   notice.style.display = hasSamples() && !hasRealWords() ? "flex" : "none";
 
+  renderWordFilterBar();
+
+  const thead = document.getElementById("word-thead");
+  if (isJoyo) {
+    thead.innerHTML = `<tr>
+      <th>한자</th>
+      <th class="col-korean">한국한자</th>
+      <th class="col-onyomi">음독</th>
+      <th class="col-kunyomi">훈독</th>
+      <th>의미</th>
+      <th>레벨</th>
+      <th></th>
+    </tr>`;
+  } else {
+    thead.innerHTML = `<tr>
+      <th>단어</th>
+      <th class="col-reading">발음</th>
+      <th>의미</th>
+      <th class="col-example">예문</th>
+      <th>레벨</th>
+      <th></th>
+    </tr>`;
+  }
+
   body.innerHTML = "";
   if (!list.length) {
     body.innerHTML = `
-      <tr><td colspan="7">
+      <tr><td colspan="6">
         <div class="empty-table">
           <div class="empty-icon">📭</div>
           <p>단어가 없어요. 단어를 추가해보세요!</p>
@@ -384,19 +494,29 @@ function renderWordList() {
 
   list.forEach((w) => {
     const tr = mkEl("tr");
-    tr.innerHTML = `
-      <td>
-        <div class="td-kanji">${w.kanji || w.reading}</div>
-        ${w.kanji ? `<div class="td-reading">${w.reading}</div>` : ""}
-      </td>
-      <td class="td-meaning">${w.meaning}</td>
-      <td class="td-onyomi">${w.onyomi || "—"}</td>
-      <td class="td-kunyomi">${w.kunyomi || "—"}</td>
-      <td>${w.example ? `<span style="font-size:12px;color:var(--text-3)">있음</span>` : "—"}</td>
-      <td><span class="level-badge${w.isSample ? " sample" : w.level === JOYO_LEVEL ? " joyo" : ""}">${w.isSample ? "샘플" : w.level}</span></td>
-      <td><button class="btn-delete" data-id="${w.id}">✕</button></td>
-    `;
+    tr.style.cursor = "pointer";
+    if (isJoyo) {
+      tr.innerHTML = `
+        <td><div class="td-kanji">${w.kanji}</div></td>
+        <td class="col-korean td-korean">${w.korean || "—"}</td>
+        <td class="col-onyomi td-onyomi">${w.onyomi || "—"}</td>
+        <td class="col-kunyomi td-kunyomi">${w.kunyomi || "—"}</td>
+        <td class="td-meaning">${w.meaning || "—"}</td>
+        <td><span class="level-badge joyo">${w.jlpt || "미지정"}</span></td>
+        <td><button class="btn-delete" data-id="${w.id}">✕</button></td>
+      `;
+    } else {
+      tr.innerHTML = `
+        <td><div class="td-kanji">${w.kanji || w.reading}</div></td>
+        <td class="col-reading td-reading">${w.reading || "—"}</td>
+        <td class="td-meaning">${w.meaning}</td>
+        <td class="col-example td-example">${w.example || "—"}</td>
+        <td><span class="level-badge${w.isSample ? " sample" : ""}">${w.isSample ? "샘플" : w.level}</span></td>
+        <td><button class="btn-delete" data-id="${w.id}">✕</button></td>
+      `;
+    }
     tr.querySelector(".btn-delete").onclick = (e) => deleteWord(w.id, e);
+    tr.addEventListener("click", () => openEditModal(w));
     body.appendChild(tr);
   });
 }
@@ -432,7 +552,13 @@ function clearForm(type = "normal") {
   }
 
   if (type === "joyo") {
-    const keys = ["joyo-kanji", "joyo-onyomi", "joyo-kunyomi", "joyo-meaning"];
+    const keys = [
+      "joyo-kanji",
+      "joyo-korean",
+      "joyo-onyomi",
+      "joyo-kunyomi",
+      "joyo-meaning",
+    ];
     keys.forEach((k) => {
       const el = document.getElementById("inp-" + k);
       if (el) el.value = "";
@@ -464,6 +590,7 @@ async function addWord() {
     w = {
       ...w,
       kanji: document.getElementById("inp-joyo-kanji").value.trim(),
+      korean: document.getElementById("inp-joyo-korean").value.trim(),
       onyomi: document.getElementById("inp-joyo-onyomi").value.trim(),
       kunyomi: document.getElementById("inp-joyo-kunyomi").value.trim(),
       meaning: document.getElementById("inp-joyo-meaning").value.trim(),
@@ -471,8 +598,8 @@ async function addWord() {
     };
   }
 
-  if (!w.kanji || !w.meaning) {
-    toast("필수값을 입력해주세요");
+  if (isJoyo ? !w.kanji || !w.korean : !w.reading || !w.meaning) {
+    toast(isJoyo ? "한자와 한국한자는 필수값이에요" : "필수값을 입력해주세요");
     return;
   }
 
@@ -508,6 +635,93 @@ async function deleteWord(id, e) {
   } catch (e) {
     toast("삭제 실패. 인터넷 연결을 확인해주세요.");
   }
+}
+
+/* ===== EDIT MODAL ===== */
+function openEditModal(word) {
+  editingId = word.id;
+  const isJoyo = word.level === JOYO_LEVEL;
+
+  document.getElementById("modal-normal-fields").style.display = isJoyo
+    ? "none"
+    : "block";
+  document.getElementById("modal-joyo-fields").style.display = isJoyo
+    ? "block"
+    : "none";
+
+  if (!isJoyo) {
+    document.getElementById("edit-kanji").value = word.kanji || "";
+    document.getElementById("edit-reading").value = word.reading || "";
+    document.getElementById("edit-meaning").value = word.meaning || "";
+    document.getElementById("edit-korean").value = word.korean || "";
+    document.getElementById("edit-example").value = word.example || "";
+  } else {
+    document.getElementById("edit-joyo-kanji").value = word.kanji || "";
+    document.getElementById("edit-joyo-korean").value = word.korean || "";
+    document.getElementById("edit-joyo-onyomi").value = word.onyomi || "";
+    document.getElementById("edit-joyo-kunyomi").value = word.kunyomi || "";
+    document.getElementById("edit-joyo-meaning").value = word.meaning || "";
+    document.getElementById("edit-joyo-jlpt").value = word.jlpt || "";
+  }
+
+  document.getElementById("edit-modal").classList.add("show");
+}
+
+function closeEditModal() {
+  document.getElementById("edit-modal").classList.remove("show");
+  editingId = null;
+}
+
+async function saveEdit() {
+  const word = words.find((w) => w.id === editingId);
+  if (!word) return;
+
+  const isJoyo = word.level === JOYO_LEVEL;
+  let updated;
+
+  if (!isJoyo) {
+    updated = {
+      kanji: document.getElementById("edit-kanji").value.trim(),
+      reading: document.getElementById("edit-reading").value.trim(),
+      meaning: document.getElementById("edit-meaning").value.trim(),
+      korean: document.getElementById("edit-korean").value.trim(),
+      example: document.getElementById("edit-example").value.trim(),
+    };
+    if (!updated.reading || !updated.meaning) {
+      toast("발음과 의미는 필수값이에요");
+      return;
+    }
+  } else {
+    updated = {
+      kanji: document.getElementById("edit-joyo-kanji").value.trim(),
+      korean: document.getElementById("edit-joyo-korean").value.trim(),
+      onyomi: document.getElementById("edit-joyo-onyomi").value.trim(),
+      kunyomi: document.getElementById("edit-joyo-kunyomi").value.trim(),
+      meaning: document.getElementById("edit-joyo-meaning").value.trim(),
+      jlpt: document.getElementById("edit-joyo-jlpt").value,
+    };
+    if (!updated.kanji || !updated.korean) {
+      toast("한자와 한국한자는 필수값이에요");
+      return;
+    }
+  }
+
+  const btn = document.getElementById("modal-save");
+  btn.disabled = true;
+  btn.textContent = "저장 중...";
+
+  try {
+    await updateDoc(doc(db, "words", editingId), updated);
+    Object.assign(word, updated);
+    renderAll();
+    closeEditModal();
+    toast("수정했어요!");
+  } catch {
+    toast("저장 실패. 인터넷 연결을 확인해주세요.");
+  }
+
+  btn.disabled = false;
+  btn.textContent = "저장하기";
 }
 
 /* ===== REVIEW ===== */
@@ -742,11 +956,18 @@ async function init() {
     });
   });
 
-  // Hamburger
+  // Hamburger & back & title
   document.getElementById("hamburger").addEventListener("click", openSidebar);
   document
     .getElementById("sidebar-overlay")
     .addEventListener("click", closeSidebar);
+  document.getElementById("btn-back").addEventListener("click", goBack);
+  document
+    .getElementById("topbar-title")
+    .addEventListener("click", () => showScreen("home"));
+  document
+    .querySelector(".sidebar-logo")
+    .addEventListener("click", () => showScreen("home"));
 
   // Add form submit
   document.getElementById("submit-btn").addEventListener("click", addWord);
@@ -774,6 +995,18 @@ async function init() {
   document
     .getElementById("btn-done-restart")
     .addEventListener("click", restartReview);
+
+  // Edit modal
+  document
+    .getElementById("modal-close")
+    .addEventListener("click", closeEditModal);
+  document
+    .getElementById("modal-cancel")
+    .addEventListener("click", closeEditModal);
+  document.getElementById("modal-save").addEventListener("click", saveEdit);
+  document.getElementById("edit-modal").addEventListener("click", (e) => {
+    if (e.target === e.currentTarget) closeEditModal();
+  });
 
   showScreen("home");
 }
