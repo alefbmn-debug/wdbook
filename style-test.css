@@ -19,6 +19,37 @@
   --radius-xs: 6px;
   --sidebar-w: 260px;
   --content-max: 900px;
+  --loading-bg: rgba(255, 255, 255, 0.92);
+  --input-focus-bg: #ffffff;
+  --joyo-color: #7d3c98;
+  --joyo-bg: #f5eef8;
+  --joyo-border: #9b59b6;
+  --sample-bg: #fffdf0;
+  --sample-border: #f5d76e;
+  --sample-text: #7d6608;
+}
+
+[data-theme="dark"] {
+  --bg: #111318;
+  --surface: #1c1f2b;
+  --surface-2: #22263a;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --text: #e2e5f0;
+  --text-2: #9aa0b8;
+  --text-3: #5e6480;
+  --shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --green-light: #0d3525;
+  --green-mid: #1a6b4a;
+  --loading-bg: rgba(17, 19, 24, 0.92);
+  --input-focus-bg: #252839;
+  --joyo-color: #c084fc;
+  --joyo-bg: #2d1b3d;
+  --joyo-border: #7c3aed;
+  --sample-bg: #2a2412;
+  --sample-border: #7a6200;
+  --sample-text: #d4b44a;
 }
 
 * {
@@ -26,6 +57,33 @@
   margin: 0;
   padding: 0;
   -webkit-tap-highlight-color: transparent;
+}
+
+body,
+.sidebar,
+.topbar,
+.stat-card,
+.form-card,
+.word-table-wrap,
+.flip-card,
+.prog-wrap,
+.side-card,
+.done-wrap,
+.modal-card,
+.nav-item,
+.level-pill,
+.filter-pill,
+.lv-sel-btn,
+.form-input,
+.rev-btn,
+.shuffle-btn,
+.btn-nav-prev,
+.btn-cancel,
+.btn-done-sub {
+  transition:
+    background-color 0.25s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
 }
 
 body {
@@ -174,31 +232,31 @@ body {
 /* 상용한자 전용 */
 .level-pill.joyo {
   border-style: dashed;
-  border-color: #9b59b6;
-  color: #7d3c98;
+  border-color: var(--joyo-border);
+  color: var(--joyo-color);
   margin-top: 4px;
   width: 100%;
 }
 .level-pill.joyo:hover {
-  border-color: #7d3c98;
-  color: #7d3c98;
-  background: #f5eef8;
+  border-color: var(--joyo-color);
+  color: var(--joyo-color);
+  background: var(--joyo-bg);
 }
 .level-pill.joyo.sel {
-  background: #9b59b6;
-  border-color: #9b59b6;
+  background: var(--joyo-border);
+  border-color: var(--joyo-border);
   color: white;
   border-style: solid;
 }
 
 .lv-sel-btn.joyo {
   border-style: dashed;
-  border-color: #9b59b6;
-  color: #7d3c98;
+  border-color: var(--joyo-border);
+  color: var(--joyo-color);
 }
 .lv-sel-btn.joyo.sel {
-  background: #9b59b6;
-  border-color: #9b59b6;
+  background: var(--joyo-border);
+  border-color: var(--joyo-border);
   color: white;
   border-style: solid;
 }
@@ -244,6 +302,29 @@ body {
 .topbar-sub {
   font-size: 13px;
   color: var(--text-3);
+}
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.theme-toggle {
+  width: 36px;
+  height: 36px;
+  background: none;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  font-size: 18px;
+  color: var(--text);
+  border-radius: var(--radius-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, border-color 0.15s;
+}
+.theme-toggle:hover {
+  background: var(--bg);
+  border-color: var(--border-strong);
 }
 .hamburger {
   display: none;
@@ -415,7 +496,7 @@ body {
 }
 .td-korean {
   font-size: 13px;
-  color: #7d3c98;
+  color: var(--joyo-color);
   font-weight: 500;
 }
 .level-badge {
@@ -428,12 +509,12 @@ body {
   color: var(--green-dark);
 }
 .level-badge.sample {
-  background: #fef3cd;
-  color: #856404;
+  background: var(--sample-bg);
+  color: var(--sample-text);
 }
 .level-badge.joyo {
-  background: #f5eef8;
-  color: #7d3c98;
+  background: var(--joyo-bg);
+  color: var(--joyo-color);
 }
 .btn-delete {
   width: 28px;
@@ -455,12 +536,12 @@ body {
 }
 
 .sample-notice {
-  background: #fffdf0;
-  border: 1px solid #f5d76e;
+  background: var(--sample-bg);
+  border: 1px solid var(--sample-border);
   border-radius: var(--radius-sm);
   padding: 12px 16px;
   font-size: 13px;
-  color: #7d6608;
+  color: var(--sample-text);
   margin-bottom: 16px;
   display: flex;
   align-items: center;
@@ -534,7 +615,7 @@ body {
 .form-input:focus {
   outline: none;
   border-color: var(--green);
-  background: white;
+  background: var(--input-focus-bg);
 }
 .form-input::placeholder {
   color: var(--text-3);
@@ -610,6 +691,89 @@ textarea.form-input {
 }
 .btn-cancel:hover {
   background: var(--bg);
+}
+
+/* ===== KUNYOMI PAIR UI ===== */
+.kunyomi-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.kunyomi-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+.kunyomi-pair .form-input {
+  margin: 0;
+}
+.btn-remove-pair {
+  width: 34px;
+  height: 42px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  color: var(--text-3);
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.btn-remove-pair:hover {
+  background: #fee2e2;
+  color: #c0392b;
+  border-color: #fca5a5;
+}
+.btn-add-pair {
+  background: none;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-3);
+  cursor: pointer;
+  font-family: inherit;
+  width: 100%;
+  transition: all 0.15s;
+  margin-top: 2px;
+}
+.btn-add-pair:hover {
+  border-color: var(--green);
+  color: var(--green);
+  background: var(--green-light);
+}
+.kunyomi-header {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 8px;
+  margin-bottom: 4px;
+  padding: 0 2px;
+}
+.kunyomi-header span {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+/* 테이블 훈독 셀 */
+.kunyomi-pair-tag {
+  display: inline-block;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.kunyomi-pair-meaning {
+  color: var(--green-dark);
+  font-size: 11px;
+  margin-left: 2px;
 }
 
 /* ===== REVIEW / FLASHCARD ===== */
@@ -738,7 +902,7 @@ textarea.form-input {
 /* ===== CARD KOREAN HINT (상용한자 앞면 한국한자) ===== */
 .card-korean-hint {
   font-size: 20px;
-  color: #7d3c98;
+  color: var(--joyo-color);
   font-weight: 600;
   margin-top: 12px;
   letter-spacing: 0.04em;
@@ -1043,7 +1207,7 @@ textarea.form-input {
 .loading-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--loading-bg);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1123,27 +1287,27 @@ textarea.form-input {
 }
 .filter-pill.joyo {
   border-style: dashed;
-  border-color: #9b59b6;
-  color: #7d3c98;
+  border-color: var(--joyo-border);
+  color: var(--joyo-color);
 }
 .filter-pill.joyo:hover {
-  background: #f5eef8;
+  background: var(--joyo-bg);
 }
 .filter-pill.joyo.sel {
-  background: #9b59b6;
-  border-color: #9b59b6;
+  background: var(--joyo-border);
+  border-color: var(--joyo-border);
   color: white;
   border-style: solid;
 }
 .filter-pill.sub {
   font-size: 12px;
   padding: 5px 11px;
-  border-color: #c39bd3;
-  color: #7d3c98;
+  border-color: var(--joyo-border);
+  color: var(--joyo-color);
 }
 .filter-pill.sub.sel {
-  background: #9b59b6;
-  border-color: #9b59b6;
+  background: var(--joyo-border);
+  border-color: var(--joyo-border);
   color: white;
 }
 .filter-sep {

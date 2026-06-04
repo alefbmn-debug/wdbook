@@ -182,6 +182,82 @@ let selLevel = "all";
 let wordJoyoFilter = "all";
 let editingId = null;
 let navHistory = [];
+/* ===== KUNYOMI PAIR HELPERS ===== */
+function escHtml(s) {
+  return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function parseKunyomi(val) {
+  if (!val) return [];
+  if (Array.isArray(val)) return val;
+  if (typeof val === "string" && val.trim()) return [{ r: val.trim(), m: "" }];
+  return [];
+}
+
+function renderKunyomiList(listId, pairs) {
+  const list = document.getElementById(listId);
+  list.innerHTML = "";
+  const rows = pairs.length ? pairs : [{ r: "", m: "" }];
+  rows.forEach(({ r, m }) => _appendKunyomiRow(list, r, m));
+}
+
+function addKunyomiRow(listId) {
+  _appendKunyomiRow(document.getElementById(listId), "", "");
+}
+
+function _appendKunyomiRow(listEl, r, m) {
+  const row = mkEl("div", "kunyomi-pair");
+  row.innerHTML = `
+    <input class="form-input kunyomi-r" type="text" placeholder="발음 (예: ひ)" value="${escHtml(r)}" autocomplete="off" />
+    <input class="form-input kunyomi-m" type="text" placeholder="의미 (예: 날)" value="${escHtml(m)}" autocomplete="off" />
+    <button type="button" class="btn-remove-pair" title="삭제">×</button>
+  `;
+  row.querySelector(".btn-remove-pair").onclick = () => {
+    if (listEl.children.length > 1) {
+      row.remove();
+    } else {
+      row.querySelector(".kunyomi-r").value = "";
+      row.querySelector(".kunyomi-m").value = "";
+    }
+  };
+  listEl.appendChild(row);
+}
+
+function getKunyomiPairs(listId) {
+  return Array.from(document.getElementById(listId).querySelectorAll(".kunyomi-pair"))
+    .map((row) => ({
+      r: row.querySelector(".kunyomi-r").value.trim(),
+      m: row.querySelector(".kunyomi-m").value.trim(),
+    }))
+    .filter((p) => p.r);
+}
+
+function formatKunyomiTable(kunyomi) {
+  const pairs = parseKunyomi(kunyomi);
+  if (!pairs.length) return "—";
+  return pairs
+    .map((p) => (p.m ? `${p.r}<span class="kunyomi-pair-meaning">·${p.m}</span>` : p.r))
+    .join("<br>");
+}
+
+function formatKunyomiBack(kunyomi, isRevealed) {
+  const pairs = parseKunyomi(kunyomi);
+  if (!pairs.length) return "";
+  if (!isRevealed) {
+    return `<div class="back-item back-item--hidden">
+      <span class="back-item-lbl">훈독</span>
+      <span class="back-item-val">●●●</span>
+    </div>`;
+  }
+  return pairs
+    .map((p, i) => `
+      <div class="back-item">
+        <span class="back-item-lbl">${pairs.length > 1 ? `훈독${i + 1}` : "훈독"}</span>
+        <span class="back-item-val">${escHtml(p.r)}${p.m ? ` · ${escHtml(p.m)}` : ""}</span>
+      </div>`)
+    .join("");
+}
+
 /* ===== FORM TOGGLE ===== */
 function toggleAddForm(type) {
   const normalEl = document.getElementById("normal-fields");
@@ -189,6 +265,11 @@ function toggleAddForm(type) {
 
   if (normalEl) normalEl.style.display = type === "normal" ? "grid" : "none";
   if (joyoEl) joyoEl.style.display = type === "joyo" ? "grid" : "none";
+
+  if (type === "joyo") {
+    const list = document.getElementById("add-kunyomi-list");
+    if (list && list.children.length === 0) addKunyomiRow("add-kunyomi-list");
+  }
 }
 let addLv = "N5";
 let deck = [],
@@ -339,6 +420,7 @@ function renderHome() {
   const list = filtered();
 
   document.getElementById("stat-total").textContent = total;
+  document.getElementById("nav-total").textContent = total;
   document.getElementById("stat-real").textContent = real;
   document.getElementById("stat-level").textContent =
     selLevel === "all" ? "전체" : selLevel;
@@ -500,7 +582,7 @@ function renderWordList() {
         <td><div class="td-kanji">${w.kanji}</div></td>
         <td class="col-korean td-korean">${w.korean || "—"}</td>
         <td class="col-onyomi td-onyomi">${w.onyomi || "—"}</td>
-        <td class="col-kunyomi td-kunyomi">${w.kunyomi || "—"}</td>
+        <td class="col-kunyomi td-kunyomi">${formatKunyomiTable(w.kunyomi)}</td>
         <td class="td-meaning">${w.meaning || "—"}</td>
         <td><span class="level-badge joyo">${w.jlpt || "미지정"}</span></td>
         <td><button class="btn-delete" data-id="${w.id}">✕</button></td>
@@ -552,19 +634,13 @@ function clearForm(type = "normal") {
   }
 
   if (type === "joyo") {
-    const keys = [
-      "joyo-kanji",
-      "joyo-korean",
-      "joyo-onyomi",
-      "joyo-kunyomi",
-      "joyo-meaning",
-    ];
-    keys.forEach((k) => {
+    ["joyo-kanji", "joyo-korean", "joyo-onyomi", "joyo-meaning"].forEach((k) => {
       const el = document.getElementById("inp-" + k);
       if (el) el.value = "";
     });
     const jlptEl = document.getElementById("inp-joyo-jlpt");
     if (jlptEl) jlptEl.value = "";
+    renderKunyomiList("add-kunyomi-list", []);
   }
 }
 
@@ -592,7 +668,7 @@ async function addWord() {
       kanji: document.getElementById("inp-joyo-kanji").value.trim(),
       korean: document.getElementById("inp-joyo-korean").value.trim(),
       onyomi: document.getElementById("inp-joyo-onyomi").value.trim(),
-      kunyomi: document.getElementById("inp-joyo-kunyomi").value.trim(),
+      kunyomi: getKunyomiPairs("add-kunyomi-list"),
       meaning: document.getElementById("inp-joyo-meaning").value.trim(),
       jlpt: jlptVal || "",
     };
@@ -638,6 +714,21 @@ async function deleteWord(id, e) {
 }
 
 /* ===== EDIT MODAL ===== */
+function renderEditLevelRow(currentLevel) {
+  const row = document.getElementById("edit-level-row");
+  row.innerHTML = "";
+  LEVELS.forEach((lv) => {
+    const btn = mkEl("button", "lv-sel-btn" + (lv === currentLevel ? " sel" : ""));
+    btn.textContent = lv;
+    btn.dataset.lv = lv;
+    btn.onclick = () => {
+      row.querySelectorAll(".lv-sel-btn").forEach((b) => b.classList.remove("sel"));
+      btn.classList.add("sel");
+    };
+    row.appendChild(btn);
+  });
+}
+
 function openEditModal(word) {
   editingId = word.id;
   const isJoyo = word.level === JOYO_LEVEL;
@@ -655,11 +746,12 @@ function openEditModal(word) {
     document.getElementById("edit-meaning").value = word.meaning || "";
     document.getElementById("edit-korean").value = word.korean || "";
     document.getElementById("edit-example").value = word.example || "";
+    renderEditLevelRow(word.level);
   } else {
     document.getElementById("edit-joyo-kanji").value = word.kanji || "";
     document.getElementById("edit-joyo-korean").value = word.korean || "";
     document.getElementById("edit-joyo-onyomi").value = word.onyomi || "";
-    document.getElementById("edit-joyo-kunyomi").value = word.kunyomi || "";
+    renderKunyomiList("edit-kunyomi-list", parseKunyomi(word.kunyomi));
     document.getElementById("edit-joyo-meaning").value = word.meaning || "";
     document.getElementById("edit-joyo-jlpt").value = word.jlpt || "";
   }
@@ -680,12 +772,14 @@ async function saveEdit() {
   let updated;
 
   if (!isJoyo) {
+    const selectedLevel = document.querySelector("#edit-level-row .lv-sel-btn.sel");
     updated = {
       kanji: document.getElementById("edit-kanji").value.trim(),
       reading: document.getElementById("edit-reading").value.trim(),
       meaning: document.getElementById("edit-meaning").value.trim(),
       korean: document.getElementById("edit-korean").value.trim(),
       example: document.getElementById("edit-example").value.trim(),
+      level: selectedLevel ? selectedLevel.dataset.lv : word.level,
     };
     if (!updated.reading || !updated.meaning) {
       toast("발음과 의미는 필수값이에요");
@@ -696,7 +790,7 @@ async function saveEdit() {
       kanji: document.getElementById("edit-joyo-kanji").value.trim(),
       korean: document.getElementById("edit-joyo-korean").value.trim(),
       onyomi: document.getElementById("edit-joyo-onyomi").value.trim(),
-      kunyomi: document.getElementById("edit-joyo-kunyomi").value.trim(),
+      kunyomi: getKunyomiPairs("edit-kunyomi-list"),
       meaning: document.getElementById("edit-joyo-meaning").value.trim(),
       jlpt: document.getElementById("edit-joyo-jlpt").value,
     };
@@ -784,7 +878,7 @@ function renderCard() {
     document.getElementById("card-back").innerHTML = `
       <div class="back-rows">
         ${revRow("음독", w.onyomi, "onyomi")}
-        ${revRow("훈독", w.kunyomi, "kunyomi")}
+        ${formatKunyomiBack(w.kunyomi, revealed.has("kunyomi"))}
         ${revRow("의미", w.meaning, "meaning")}
       </div>
     `;
@@ -911,6 +1005,25 @@ function shuffleDeck() {
   toast("카드를 섞었어요 🔀");
 }
 
+/* ===== DARK / LIGHT MODE ===== */
+(function initTheme() {
+  const saved = localStorage.getItem("theme") || "light";
+  applyTheme(saved);
+})();
+
+document.getElementById("theme-toggle").addEventListener("click", () => {
+  const current = document.documentElement.getAttribute("data-theme") || "light";
+  applyTheme(current === "dark" ? "light" : "dark");
+});
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  localStorage.setItem("theme", theme);
+  document.getElementById("theme-icon").textContent = theme === "dark" ? "☀️" : "🌙";
+  const metaTheme = document.querySelector('meta[name="theme-color"]');
+  if (metaTheme) metaTheme.content = theme === "dark" ? "#1c1f2b" : "#ffffff";
+}
+
 function restartReview() {
   ci = 0;
   revealed.clear();
@@ -974,6 +1087,12 @@ async function init() {
   document
     .getElementById("cancel-btn")
     .addEventListener("click", () => showScreen("home"));
+  document
+    .getElementById("btn-add-kunyomi-add")
+    .addEventListener("click", () => addKunyomiRow("add-kunyomi-list"));
+  document
+    .getElementById("btn-add-kunyomi-edit")
+    .addEventListener("click", () => addKunyomiRow("edit-kunyomi-list"));
 
   // Flip card
   document.getElementById("flip-card").addEventListener("click", flipCard);
