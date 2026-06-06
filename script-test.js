@@ -180,6 +180,7 @@ const SAMPLE_WORDS = [
 let words = [];
 let selLevel = "all";
 let wordJoyoFilter = "all";
+let lfOpen = null; // "normal" | "joyo" | null
 let editingId = null;
 let navHistory = [];
 /* ===== KUNYOMI PAIR HELPERS ===== */
@@ -258,20 +259,85 @@ function formatKunyomiBack(kunyomi, isRevealed) {
     .join("");
 }
 
-/* ===== FORM TOGGLE ===== */
-function toggleAddForm(type) {
-  const normalEl = document.getElementById("normal-fields");
-  const joyoEl = document.getElementById("joyo-fields");
+/* ===== ADD FORM CATEGORY FILTER ===== */
+let addCategory = null; // null | "normal" | "joyo"
+let addNormalLv = null; // null | "N1" ~ "N5"
 
-  if (normalEl) normalEl.style.display = type === "normal" ? "grid" : "none";
-  if (joyoEl) joyoEl.style.display = type === "joyo" ? "grid" : "none";
+function renderAddLFBar() {
+  const btnNormal = document.getElementById("add-lf-btn-normal");
+  const btnJoyo   = document.getElementById("add-lf-btn-joyo");
+  const subNormal = document.getElementById("add-lf-sub-normal");
+  const subJoyo   = document.getElementById("add-lf-sub-joyo");
+  if (!btnNormal) return;
 
-  if (type === "joyo") {
+  const isNormal = addCategory === "normal";
+  const isJoyo   = addCategory === "joyo";
+
+  btnNormal.classList.toggle("lf-hide", isJoyo);
+  btnJoyo.classList.toggle("lf-hide", isNormal);
+  btnNormal.classList.toggle("active", isNormal);
+  btnJoyo.classList.toggle("active", isJoyo);
+  btnNormal.classList.toggle("open", isNormal);
+  btnJoyo.classList.toggle("open", isJoyo);
+  subNormal.classList.toggle("open", isNormal);
+  subJoyo.classList.toggle("open", isJoyo);
+
+  // 일반 단어 N1~N5 (필수)
+  subNormal.innerHTML = "";
+  LEVELS.forEach((lv) => {
+    const sel = isNormal && addNormalLv === lv;
+    const btn = mkEl("button", "lf-pill" + (sel ? " sel" : ""));
+    btn.textContent = lv;
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      addNormalLv = addNormalLv === lv ? null : lv;
+      renderAddLFBar();
+    };
+    subNormal.appendChild(btn);
+  });
+
+  // 상용한자 N1~N5 (선택) — inp-joyo-jlpt select와 동기
+  subJoyo.innerHTML = "";
+  const joyoJlptEl = document.getElementById("inp-joyo-jlpt");
+  const curJoyoLv  = joyoJlptEl ? joyoJlptEl.value : "";
+  LEVELS.forEach((lv) => {
+    const sel = isJoyo && curJoyoLv === lv;
+    const btn = mkEl("button", "lf-pill joyo" + (sel ? " sel" : ""));
+    btn.textContent = lv;
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      if (joyoJlptEl) joyoJlptEl.value = curJoyoLv === lv ? "" : lv;
+      renderAddLFBar();
+    };
+    subJoyo.appendChild(btn);
+  });
+
+  const normalFields = document.getElementById("normal-fields");
+  const joyoFields   = document.getElementById("joyo-fields");
+  if (normalFields) normalFields.style.display = isNormal ? "block" : "none";
+  if (joyoFields)   joyoFields.style.display   = isJoyo   ? "block" : "none";
+
+  if (isJoyo) {
     const list = document.getElementById("add-kunyomi-list");
     if (list && list.children.length === 0) addKunyomiRow("add-kunyomi-list");
   }
+
+  const submitBtn = document.getElementById("submit-btn");
+  if (submitBtn) {
+    submitBtn.disabled =
+      addCategory === null || (addCategory === "normal" && !addNormalLv);
+  }
 }
-let addLv = "N5";
+
+function toggleAddCategory(category) {
+  if (addCategory === category) {
+    addCategory = null;
+    addNormalLv = null;
+  } else {
+    addCategory = category;
+  }
+  renderAddLFBar();
+}
 let deck = [],
   ci = 0,
   revealed = new Set(),
@@ -323,8 +389,13 @@ async function deleteSamples() {
 
 /* ===== HELPERS ===== */
 function filtered() {
-  if (selLevel === "all") return words.filter((w) => w.level !== JOYO_LEVEL);
-  return words.filter((w) => w.level === selLevel);
+  if (lfOpen === null) return words.filter((w) => w.level !== JOYO_LEVEL);
+  if (lfOpen === "normal") {
+    const base = words.filter((w) => w.level !== JOYO_LEVEL);
+    return selLevel === "all" ? base : base.filter((w) => w.level === selLevel);
+  }
+  const base = words.filter((w) => w.level === JOYO_LEVEL);
+  return wordJoyoFilter === "all" ? base : base.filter((w) => w.jlpt === wordJoyoFilter);
 }
 function countLv(lv) {
   return words.filter((w) => w.level === lv).length;
@@ -390,6 +461,7 @@ function showScreen(name, addToHistory = true) {
   setSidebarActive(name);
   closeSidebar();
   window.scrollTo(0, 0);
+  document.body.classList.toggle("review-mode", name === "review");
 
   const titles = {
     home: "홈",
@@ -408,8 +480,7 @@ function goBack() {
   const prev = navHistory.pop();
   showScreen(prev, false);
   if (prev === "add") {
-    renderAddLevel();
-    toggleAddForm(addLv === JOYO_LEVEL ? "joyo" : "normal");
+    renderAddLFBar();
   }
 }
 
@@ -426,100 +497,89 @@ function renderHome() {
     selLevel === "all" ? "전체" : selLevel;
   document.getElementById("stat-filtered").textContent = list.length;
 
-  // level pills
-  const pillWrap = document.getElementById("level-pills");
-  pillWrap.innerHTML = "";
-  const allPill = mkEl(
-    "div",
-    "level-pill" + (selLevel === "all" ? " sel" : ""),
-  );
-  allPill.textContent = "전체";
-  allPill.onclick = () => {
-    selLevel = "all";
-    wordJoyoFilter = "all";
-    renderAll();
-  };
-  pillWrap.appendChild(allPill);
+  renderLevelFilter();
+}
 
+function renderLFBar(pfx) {
+  const btnNormal = document.getElementById(pfx + "btn-normal");
+  const btnJoyo   = document.getElementById(pfx + "btn-joyo");
+  const subNormal = document.getElementById(pfx + "sub-normal");
+  const subJoyo   = document.getElementById(pfx + "sub-joyo");
+  if (!btnNormal) return;
+
+  const isNormal = lfOpen === "normal";
+  const isJoyo   = lfOpen === "joyo";
+
+  // 펼쳐졌을 때 반대쪽 버튼 숨김
+  btnNormal.classList.toggle("lf-hide", isJoyo);
+  btnJoyo.classList.toggle("lf-hide", isNormal);
+
+  // 활성 색상 & 화살표 회전
+  btnNormal.classList.toggle("active", isNormal);
+  btnJoyo.classList.toggle("active", isJoyo);
+  btnNormal.classList.toggle("open", isNormal);
+  btnJoyo.classList.toggle("open", isJoyo);
+
+  // 서브 패널 슬라이드
+  subNormal.classList.toggle("open", isNormal);
+  subJoyo.classList.toggle("open", isJoyo);
+
+  // 일반 단어 서브 pills (N1~N5)
+  subNormal.innerHTML = "";
   LEVELS.forEach((lv) => {
-    const cnt = countLv(lv);
-    const pill = mkEl("div", "level-pill" + (selLevel === lv ? " sel" : ""));
-    pill.textContent = `${lv} (${cnt})`;
-    pill.onclick = () => {
-      selLevel = lv;
+    const sel = isNormal && selLevel === lv;
+    const btn = mkEl("button", "lf-pill" + (sel ? " sel" : ""));
+    btn.textContent = lv;
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      selLevel = (selLevel === lv) ? "all" : lv; // 재클릭 시 선택 해제
       wordJoyoFilter = "all";
       renderAll();
     };
-    pillWrap.appendChild(pill);
+    subNormal.appendChild(btn);
   });
 
-  // 상용한자 pill (구분선 역할의 클래스 추가)
-  const joyoCnt = countLv(JOYO_LEVEL);
-  const joyoPill = mkEl(
-    "div",
-    "level-pill joyo" + (selLevel === JOYO_LEVEL ? " sel" : ""),
-  );
-  joyoPill.textContent = `상용한자 (${joyoCnt})`;
-  joyoPill.onclick = () => {
-    selLevel = JOYO_LEVEL;
+  // 상용한자 서브 pills (N1~N5)
+  subJoyo.innerHTML = "";
+  LEVELS.forEach((v) => {
+    const sel = isJoyo && wordJoyoFilter === v;
+    const btn = mkEl("button", "lf-pill joyo" + (sel ? " sel" : ""));
+    btn.textContent = v;
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      wordJoyoFilter = (wordJoyoFilter === v) ? "all" : v; // 재클릭 시 선택 해제
+      selLevel = JOYO_LEVEL;
+      renderAll();
+    };
+    subJoyo.appendChild(btn);
+  });
+}
+
+function renderLevelFilter() {
+  renderLFBar("lf-");
+  renderLFBar("wl-lf-");
+}
+
+function toggleLFGroup(group) {
+  if (lfOpen === group) {
+    // 펼쳐진 버튼 재클릭 → 기본 상태로 복귀
+    lfOpen = null;
+    selLevel = "all";
     wordJoyoFilter = "all";
-    renderAll();
-  };
-  pillWrap.appendChild(joyoPill);
+  } else {
+    lfOpen = group;
+    if (group === "normal") {
+      selLevel = "all";
+      wordJoyoFilter = "all";
+    } else {
+      selLevel = JOYO_LEVEL;
+      wordJoyoFilter = "all";
+    }
+  }
+  renderAll();
 }
 
 /* ===== WORD LIST ===== */
-function renderWordFilterBar() {
-  const bar = document.getElementById("word-filter-bar");
-  bar.innerHTML = "";
-
-  const mainLevels = [
-    { v: "all", label: "전체", cls: "" },
-    ...LEVELS.map((l) => ({ v: l, label: l, cls: "" })),
-    { v: JOYO_LEVEL, label: "상용한자", cls: "joyo" },
-  ];
-
-  mainLevels.forEach(({ v, label, cls }) => {
-    const pill = mkEl(
-      "button",
-      `filter-pill${cls ? " " + cls : ""}${selLevel === v ? " sel" : ""}`,
-    );
-    pill.textContent = label;
-    pill.onclick = () => {
-      selLevel = v;
-      wordJoyoFilter = "all";
-      renderAll();
-    };
-    bar.appendChild(pill);
-  });
-
-  if (selLevel === JOYO_LEVEL) {
-    const sep = mkEl("span", "filter-sep");
-    sep.textContent = "|";
-    bar.appendChild(sep);
-
-    const subLevels = [
-      { v: "all", label: "전체" },
-      ...LEVELS.map((l) => ({ v: l, label: l })),
-      { v: "unset", label: "미지정" },
-    ];
-
-    subLevels.forEach(({ v, label }) => {
-      const pill = mkEl(
-        "button",
-        `filter-pill sub${wordJoyoFilter === v ? " sel" : ""}`,
-      );
-      pill.textContent = label;
-      pill.onclick = (e) => {
-        e.stopPropagation();
-        wordJoyoFilter = v;
-        renderWordList();
-      };
-      bar.appendChild(pill);
-    });
-  }
-}
-
 function renderWordList() {
   const isJoyo = selLevel === JOYO_LEVEL;
   let list = filtered();
@@ -538,92 +598,43 @@ function renderWordList() {
   countEl.textContent = `${list.length}개`;
   notice.style.display = hasSamples() && !hasRealWords() ? "flex" : "none";
 
-  renderWordFilterBar();
-
   const thead = document.getElementById("word-thead");
   if (isJoyo) {
-    thead.innerHTML = `<tr>
-      <th>한자</th>
-      <th class="col-korean">한국한자</th>
-      <th class="col-onyomi">음독</th>
-      <th class="col-kunyomi">훈독</th>
-      <th>의미</th>
-      <th>레벨</th>
-      <th></th>
-    </tr>`;
+    thead.innerHTML = `<span>한자</span><span>의미</span><span>레벨</span>`;
   } else {
-    thead.innerHTML = `<tr>
-      <th>단어</th>
-      <th class="col-reading">발음</th>
-      <th>의미</th>
-      <th class="col-example">예문</th>
-      <th>레벨</th>
-      <th></th>
-    </tr>`;
+    thead.innerHTML = `<span>단어</span><span>의미</span><span>레벨</span>`;
   }
 
   body.innerHTML = "";
   if (!list.length) {
-    body.innerHTML = `
-      <tr><td colspan="6">
-        <div class="empty-table">
-          <div class="empty-icon">📭</div>
-          <p>단어가 없어요. 단어를 추가해보세요!</p>
-        </div>
-      </td></tr>`;
+    body.innerHTML = `<div class="empty-table"><div class="empty-icon">📭</div><p>단어가 없어요. 단어를 추가해보세요!</p></div>`;
     return;
   }
 
-  list.forEach((w) => {
-    const tr = mkEl("tr");
-    tr.style.cursor = "pointer";
+  list.forEach((w, i) => {
+    const row = mkEl("div", "word-card-row");
+    row.style.cursor = "pointer";
+    if (i === list.length - 1) row.classList.add("last");
     if (isJoyo) {
-      tr.innerHTML = `
-        <td><div class="td-kanji">${w.kanji}</div></td>
-        <td class="col-korean td-korean">${w.korean || "—"}</td>
-        <td class="col-onyomi td-onyomi">${w.onyomi || "—"}</td>
-        <td class="col-kunyomi td-kunyomi">${formatKunyomiTable(w.kunyomi)}</td>
-        <td class="td-meaning">${w.meaning || "—"}</td>
-        <td><span class="level-badge joyo">${w.jlpt || "미지정"}</span></td>
-        <td><button class="btn-delete" data-id="${w.id}">✕</button></td>
+      row.innerHTML = `
+        <div class="wc-word"><div class="wc-kanji">${w.kanji}</div><div class="wc-reading">${w.korean || "—"}</div></div>
+        <div class="wc-meaning">${w.meaning || "—"}</div>
+        <div class="wc-level"><span class="level-badge joyo">${w.jlpt || "미지정"}</span><button class="btn-delete" data-id="${w.id}">×</button></div>
       `;
     } else {
-      tr.innerHTML = `
-        <td><div class="td-kanji">${w.kanji || w.reading}</div></td>
-        <td class="col-reading td-reading">${w.reading || "—"}</td>
-        <td class="td-meaning">${w.meaning}</td>
-        <td class="col-example td-example">${w.example || "—"}</td>
-        <td><span class="level-badge${w.isSample ? " sample" : ""}">${w.isSample ? "샘플" : w.level}</span></td>
-        <td><button class="btn-delete" data-id="${w.id}">✕</button></td>
+      row.innerHTML = `
+        <div class="wc-word"><div class="wc-kanji">${w.kanji || w.reading}</div><div class="wc-reading">${w.reading || ""}</div></div>
+        <div class="wc-meaning">${w.meaning}</div>
+        <div class="wc-level"><span class="level-badge${w.isSample ? " sample" : ""}">${w.isSample ? "샘플" : w.level}</span><button class="btn-delete" data-id="${w.id}">×</button></div>
       `;
     }
-    tr.querySelector(".btn-delete").onclick = (e) => deleteWord(w.id, e);
-    tr.addEventListener("click", () => openEditModal(w));
-    body.appendChild(tr);
+    row.querySelector(".btn-delete").onclick = (e) => deleteWord(w.id, e);
+    row.addEventListener("click", () => openEditModal(w));
+    body.appendChild(row);
   });
 }
 
 /* ===== ADD WORD ===== */
-function renderAddLevel() {
-  const row = document.getElementById("add-level-row");
-  row.innerHTML = "";
-  [...LEVELS, JOYO_LEVEL].forEach((lv) => {
-    const btn = mkEl(
-      "button",
-      "lv-sel-btn" +
-        (addLv === lv ? " sel" : "") +
-        (lv === JOYO_LEVEL ? " joyo" : ""),
-    );
-    btn.textContent = lv;
-    btn.onclick = () => {
-      addLv = lv;
-      renderAddLevel();
-
-      toggleAddForm(lv === JOYO_LEVEL ? "joyo" : "normal");
-    };
-    row.appendChild(btn);
-  });
-}
 function clearForm(type = "normal") {
   if (type === "normal") {
     const keys = ["kanji", "reading", "meaning", "example"];
@@ -645,10 +656,14 @@ function clearForm(type = "normal") {
 }
 
 async function addWord() {
-  const isJoyo = addLv === JOYO_LEVEL;
+  if (!addCategory || (addCategory === "normal" && !addNormalLv)) {
+    toast("카테고리와 레벨을 선택해주세요");
+    return;
+  }
+  const isJoyo = addCategory === "joyo";
 
   let w = {
-    level: addLv,
+    level: isJoyo ? JOYO_LEVEL : addNormalLv,
     isSample: false,
     createdAt: Date.now(),
   };
@@ -690,6 +705,7 @@ async function addWord() {
 
     clearForm(isJoyo ? "joyo" : "normal");
     renderAll();
+    renderAddLFBar();
 
     toast("등록 완료!");
   } catch (e) {
@@ -832,9 +848,18 @@ function startReview() {
   }
 
   deck = [...list];
+  // 자동 셔플
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
   ci = 0;
   revealed.clear();
   flipped = false;
+
+  // 완료 화면 리셋
+  document.getElementById("s-review-inner").style.display = "grid";
+  document.getElementById("s-done").style.display = "none";
 
   // 사이드 패널 모드 전환
   const isJoyo = selLevel === JOYO_LEVEL;
@@ -928,6 +953,19 @@ function renderCard() {
   renderQueue();
 }
 
+function restartReview() {
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+  ci = 0;
+  revealed.clear();
+  flipped = false;
+  document.getElementById("s-review-inner").style.display = "grid";
+  document.getElementById("s-done").style.display = "none";
+  renderCard();
+}
+
 function renderQueue() {
   const wrap = document.getElementById("word-queue");
   if (!wrap) return;
@@ -979,7 +1017,7 @@ function nextCard() {
     document.getElementById("done-sub").textContent =
       `${deck.length}개 단어를 모두 학습했어요!`;
     document.getElementById("s-review-inner").style.display = "none";
-    document.getElementById("s-done").style.display = "flex";
+    document.getElementById("s-done").style.display = "block";
     return;
   }
   ci++;
@@ -1006,32 +1044,32 @@ function shuffleDeck() {
 }
 
 /* ===== DARK / LIGHT MODE ===== */
+const moonSVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>`;
+const sunSVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  localStorage.setItem("theme", theme);
+  const icon = theme === "dark" ? sunSVG : moonSVG;
+  document.querySelectorAll("#theme-icon, #theme-toggle-mobile").forEach((el) => {
+    el.innerHTML = icon;
+  });
+  const metaTheme = document.querySelector('meta[name="theme-color"]');
+  if (metaTheme) metaTheme.content = theme === "dark" ? "#1c1f2b" : "#ffffff";
+}
+
 (function initTheme() {
   const saved = localStorage.getItem("theme") || "light";
   applyTheme(saved);
 })();
 
-document.getElementById("theme-toggle").addEventListener("click", () => {
-  const current = document.documentElement.getAttribute("data-theme") || "light";
-  applyTheme(current === "dark" ? "light" : "dark");
+["theme-toggle", "theme-toggle-mobile"].forEach((id) => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener("click", () => {
+    const current = document.documentElement.getAttribute("data-theme") || "light";
+    applyTheme(current === "dark" ? "light" : "dark");
+  });
 });
-
-function applyTheme(theme) {
-  document.documentElement.setAttribute("data-theme", theme);
-  localStorage.setItem("theme", theme);
-  document.getElementById("theme-icon").textContent = theme === "dark" ? "☀️" : "🌙";
-  const metaTheme = document.querySelector('meta[name="theme-color"]');
-  if (metaTheme) metaTheme.content = theme === "dark" ? "#1c1f2b" : "#ffffff";
-}
-
-function restartReview() {
-  ci = 0;
-  revealed.clear();
-  flipped = false;
-  document.getElementById("s-review-inner").style.display = "grid";
-  document.getElementById("s-done").style.display = "none";
-  renderCard();
-}
 
 /* ===== RENDER ALL ===== */
 function renderAll() {
@@ -1055,13 +1093,12 @@ async function init() {
       }
 
       if (screen === "add") {
-        addLv = selLevel === "all" ? "N5" : selLevel;
-
+        addCategory = null;
+        addNormalLv = null;
         showScreen("add");
-        renderAddLevel();
-        toggleAddForm("normal");
         clearForm("normal");
-
+        clearForm("joyo");
+        renderAddLFBar();
         return;
       }
 
@@ -1081,6 +1118,25 @@ async function init() {
   document
     .querySelector(".sidebar-logo")
     .addEventListener("click", () => showScreen("home"));
+
+  // Level filter toggles (홈 + 단어 목록 공유)
+  document.getElementById("lf-btn-normal").addEventListener("click", () => toggleLFGroup("normal"));
+  document.getElementById("lf-btn-joyo").addEventListener("click", () => toggleLFGroup("joyo"));
+  document.getElementById("wl-lf-btn-normal").addEventListener("click", () => toggleLFGroup("normal"));
+  document.getElementById("wl-lf-btn-joyo").addEventListener("click", () => toggleLFGroup("joyo"));
+  document.getElementById("add-lf-btn-normal").addEventListener("click", () => toggleAddCategory("normal"));
+  document.getElementById("add-lf-btn-joyo").addEventListener("click", () => toggleAddCategory("joyo"));
+
+  // 필터 영역 밖 클릭 시 기본 상태로 복귀
+  document.addEventListener("click", (e) => {
+    if (lfOpen === null) return;
+    if (!e.target.closest(".lf-bar")) {
+      lfOpen = null;
+      selLevel = "all";
+      wordJoyoFilter = "all";
+      renderAll();
+    }
+  });
 
   // Add form submit
   document.getElementById("submit-btn").addEventListener("click", addWord);
