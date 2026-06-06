@@ -1,3 +1,8 @@
+/* ===== SERVICE WORKER ===== */
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getFirestore,
@@ -342,7 +347,9 @@ let deck = [],
   ci = 0,
   revealed = new Set(),
   flipped = false;
+let reviewIsJoyo = false; // startReview() 시점의 상용한자 여부 캡처
 let currentScreen = "home";
+let _screenAnimating = false;
 
 /* ===== DB ===== */
 async function loadWords() {
@@ -445,23 +452,36 @@ function closeSidebar() {
   document.getElementById("sidebar-overlay").classList.remove("show");
 }
 
+/* ===== WAKELOCK ===== */
+let _wakeLock = null;
+async function acquireWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try { _wakeLock = await navigator.wakeLock.request('screen'); } catch (_) {}
+}
+function releaseWakeLock() {
+  if (_wakeLock) { _wakeLock.release(); _wakeLock = null; }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && currentScreen === 'review') acquireWakeLock();
+});
+
 /* ===== SCREENS ===== */
 function showScreen(name, addToHistory = true) {
+  const prevScreen = currentScreen;
+
   if (name === "home") {
     navHistory = [];
   } else if (addToHistory && currentScreen !== name) {
     navHistory.push(currentScreen);
   }
 
-  document
-    .querySelectorAll(".screen")
-    .forEach((s) => s.classList.remove("active"));
-  document.getElementById("s-" + name).classList.add("active");
   currentScreen = name;
   setSidebarActive(name);
   closeSidebar();
-  window.scrollTo(0, 0);
   document.body.classList.toggle("review-mode", name === "review");
+
+  if (name === "review") acquireWakeLock();
+  else releaseWakeLock();
 
   const titles = {
     home: "홈",
@@ -473,6 +493,33 @@ function showScreen(name, addToHistory = true) {
 
   const backBtn = document.getElementById("btn-back");
   backBtn.style.display = navHistory.length > 0 ? "flex" : "none";
+
+  const isMobile = window.innerWidth <= 768;
+  const shouldAnim = isMobile && !_screenAnimating && prevScreen !== name;
+
+  if (shouldAnim) {
+    _screenAnimating = true;
+    const oldEl = document.getElementById("s-" + prevScreen);
+    const newEl = document.getElementById("s-" + name);
+    if (oldEl && newEl) {
+      oldEl.classList.add("screen-slide-out");
+      newEl.classList.add("screen-slide-in");
+      setTimeout(() => {
+        document.querySelectorAll(".screen").forEach(s =>
+          s.classList.remove("active", "screen-slide-out", "screen-slide-in")
+        );
+        newEl.classList.add("active");
+        window.scrollTo(0, 0);
+        _screenAnimating = false;
+      }, 295);
+      return;
+    }
+    _screenAnimating = false;
+  }
+
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  document.getElementById("s-" + name).classList.add("active");
+  window.scrollTo(0, 0);
 }
 
 function goBack() {
@@ -836,11 +883,12 @@ async function saveEdit() {
 
 /* ===== REVIEW ===== */
 function startReview() {
+  reviewIsJoyo = selLevel === JOYO_LEVEL; // document 이벤트 버블링으로 selLevel이 초기화되기 전에 캡처
   const list = filtered();
 
   if (!list.length) {
     toast(
-      selLevel === JOYO_LEVEL
+      reviewIsJoyo
         ? "상용한자 단어를 먼저 추가해주세요"
         : "선택한 레벨에 단어가 없어요",
     );
@@ -862,7 +910,7 @@ function startReview() {
   document.getElementById("s-done").style.display = "none";
 
   // 사이드 패널 모드 전환
-  const isJoyo = selLevel === JOYO_LEVEL;
+  const isJoyo = reviewIsJoyo;
   const normalPanel = document.getElementById("reveal-panel-normal");
   const joyoPanel = document.getElementById("reveal-panel-joyo");
   if (normalPanel) normalPanel.style.display = isJoyo ? "none" : "block";
@@ -876,7 +924,7 @@ function renderCard() {
   const total = deck.length;
   const w = deck[ci];
   const pct = Math.round((ci / total) * 100);
-  const isJoyo = selLevel === JOYO_LEVEL;
+  const isJoyo = reviewIsJoyo;
 
   document.getElementById("prog-fill").style.width = pct + "%";
   document.getElementById("prog-label").textContent = `${ci + 1} / ${total}`;
@@ -1001,7 +1049,7 @@ function toggleReveal(btn) {
     flipped = true;
   }
   // 상용한자 앞면에서 한국한자 토글 시 앞면 즉시 반영
-  const isJoyo = selLevel === JOYO_LEVEL;
+  const isJoyo = reviewIsJoyo;
   if (isJoyo && key === "korean" && !wasFlipped) {
     const w = deck[ci];
     const showKorean = revealed.has("korean");
@@ -1076,6 +1124,47 @@ function renderAll() {
   renderHome();
   renderWordList();
 }
+
+/* ===== HAPTIC FEEDBACK ===== */
+document.addEventListener('click', (e) => {
+  if (navigator.vibrate && e.target.closest('button, [onclick]')) navigator.vibrate(10);
+}, true);
+
+/* ===== KEYBOARD LAYOUT ===== */
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', () => {
+    const kh = Math.max(0, window.innerHeight - window.visualViewport.height);
+    document.documentElement.style.setProperty('--keyboard-height', kh + 'px');
+    if (kh > 0) {
+      const el = document.activeElement;
+      if (el && el !== document.body) setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 80);
+    }
+  });
+}
+
+/* ===== TOUCH GESTURES ===== */
+(function () {
+  let startX = 0, startY = 0;
+
+  document.addEventListener('touchstart', (e) => {
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+  }, { passive: true });
+
+  document.addEventListener('touchend', (e) => {
+    const dx = e.changedTouches[0].clientX - startX;
+    const dy = e.changedTouches[0].clientY - startY;
+    // 세로 방향이 더 크면 무시
+    if (Math.abs(dy) > Math.abs(dx) * 0.8 || Math.abs(dx) < 40) return;
+    const sidebarOpen = document.getElementById('sidebar').classList.contains('open');
+    // 왼쪽 끝 20px에서 오른쪽 스와이프 → 사이드바 열기
+    if (startX < 20 && dx > 50 && !sidebarOpen) { openSidebar(); return; }
+    // 사이드바 열린 상태에서 왼쪽 스와이프 → 닫기
+    if (dx < -50 && sidebarOpen) { closeSidebar(); return; }
+    // 일반 영역 오른쪽 스와이프 → 뒤로 가기
+    if (startX >= 20 && dx > 60 && !sidebarOpen) goBack();
+  }, { passive: true });
+})();
 
 /* ===== INIT ===== */
 async function init() {

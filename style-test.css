@@ -1856,3 +1856,54 @@ textarea.form-input {
     font-size: 44px;
   }
 }
+
+/* ===== PAGE SLIDE TRANSITION ===== */
+@keyframes screenSlideIn {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+@keyframes screenSlideOut {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-100%); }
+}
+
+@media (max-width: 768px) {
+  .screen-slide-out {
+    display: block !important;
+    position: fixed !important;
+    top: 60px !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    overflow-y: auto !important;
+    background: var(--bg) !important;
+    padding: 16px !important;
+    z-index: 30 !important;
+    pointer-events: none !important;
+    animation: screenSlideOut 0.28s cubic-bezier(0.4,0,0.2,1) forwards !important;
+  }
+  .screen-slide-in {
+    display: block !important;
+    position: fixed !important;
+    top: 60px !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    overflow-y: auto !important;
+    background: var(--bg) !important;
+    padding: 16px !important;
+    z-index: 31 !important;
+    animation: screenSlideIn 0.28s cubic-bezier(0.4,0,0.2,1) forwards !important;
+  }
+}
+
+/* ===== KEYBOARD HEIGHT ===== */
+:root {
+  --keyboard-height: 0px;
+}
+@media (max-width: 768px) {
+  .page-content {
+    padding-bottom: calc(16px + var(--keyboard-height, 0px));
+    transition: padding-bottom 0.15s ease;
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "JLPT 단어장",
+  "short_name": "JLPT 단어장",
+  "description": "일본어 단어 플래시카드",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f0f2f5",
+  "theme_color": "#1d9e75",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
